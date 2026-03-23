@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Cyclone.PluginUpdater": {
+      "commandName": "Project",
+      "commandLineArgs": "--app-name \"测试插件\" --process notepad --dir \"C:\\Temp\\TestPlugin\" --xml-url \"https://gitee.com/TheSummerWind/sharp-cad-update/raw/master/update.xml\" --current-version \"0.9.0\""
+    }
+  }
+}
