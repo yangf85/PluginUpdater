@@ -14,17 +14,5 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = viewModel;
-
-        // 当 ViewModel 请求打开 changelog 时，弹出子窗口
-        viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.ChangelogHtml)
-                && !string.IsNullOrEmpty(viewModel.ChangelogHtml))
-            {
-                var win = new ChangelogWindow(viewModel.ChangelogHtml);
-                win.Owner = this;
-                win.ShowDialog();
-            }
-        };
     }
 }

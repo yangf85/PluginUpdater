@@ -2,6 +2,11 @@
 using CommunityToolkit.Mvvm.Input;
 using Cyclone.PluginUpdater.Models;
 using Cyclone.PluginUpdater.Services;
+using System.Diagnostics;
+using System.Dynamic;
+using System.IO;
+using System.Text;
+using System.Windows;
 
 namespace Cyclone.PluginUpdater.ViewModels;
 
@@ -11,20 +16,33 @@ public partial class MainViewModel : ObservableObject
     private readonly Downloader _downloader;
     private readonly Installer _installer;
 
-    [ObservableProperty] private string _appName = string.Empty;
+    [ObservableProperty]
+    private string _appName = string.Empty;
+
     private UpdateArguments? _arguments;
-    [ObservableProperty] private string? _changelogHtml;
-    [ObservableProperty] private string _currentVersion = string.Empty;
-    [ObservableProperty] private int _downloadProgress;
-    [ObservableProperty] private bool _isDownloading;
-    [ObservableProperty] private bool _isFinished;
-    [ObservableProperty] private bool _isUpdateAvailable;
-    [ObservableProperty] private string _latestVersion = string.Empty;
 
     // ── 绑定属性 ────────────────────────────────────────────────
     [ObservableProperty] private string _statusMessage = "正在检查更新…";
 
     private UpdateInfo? _updateInfo;
+
+    [ObservableProperty]
+    public partial string CurrentVersion { get; set; }
+
+    [ObservableProperty]
+    public partial int DownloadProgress { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsDownloading { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsFinished { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsUpdateAvailable { get; set; }
+
+    [ObservableProperty]
+    public partial string LatestVersion { get; set; }
 
     [RelayCommand]
     private async Task StartUpdateAsync()
@@ -77,14 +95,38 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ViewChangelogAsync()
     {
-        if (_updateInfo is null) return;
+        if (string.IsNullOrEmpty(_updateInfo?.ChangelogUrl)) return;
+
         try
         {
-            ChangelogHtml = await _downloader.DownloadChangelogAsync(_updateInfo.ChangelogUrl);
+            // 1. 下载 HTML 内容
+            // 确保这里的 URL 是 Raw 格式，例如: https://gitee.com/.../raw/master/changelog.html
+            string htmlContent = await _downloader.DownloadChangelogAsync(_updateInfo.ChangelogUrl);
+
+            if (string.IsNullOrWhiteSpace(htmlContent)) return;
+
+            // 2. 获取程序运行目录并拼凑文件名
+            // AppDomain.CurrentDomain.BaseDirectory 是获取程序根目录最稳妥的方法
+            string exePath = AppDomain.CurrentDomain.BaseDirectory;
+            string filePath = Path.Combine(exePath, "change.html");
+
+            // 3. 写入文件（UTF8 编码，防止中文乱码）
+            await File.WriteAllTextAsync(filePath, htmlContent, Encoding.UTF8);
+
+            // 4. 用默认浏览器打开
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
         }
-        catch
+        catch (UnauthorizedAccessException)
         {
-            ChangelogHtml = "<p>更新日志加载失败，请检查网络。</p>";
+            MessageBox.Show("无法在程序目录创建文件，请尝试以管理员身份运行，或检查文件夹权限。", "权限错误");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"显示更新日志失败：{ex.Message}", "错误");
         }
     }
 
@@ -121,8 +163,4 @@ public partial class MainViewModel : ObservableObject
         _downloader = downloader;
         _installer = installer;
     }
-
-    // ── 初始化入口 ───────────────────────────────────────────────
-    // ── 查看更新内容 ─────────────────────────────────────────────
-    // ── 立即更新 ─────────────────────────────────────────────────
 }
