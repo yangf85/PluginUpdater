@@ -47,7 +47,10 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task StartUpdateAsync()
     {
-        if (_updateInfo is null || _arguments is null) return;
+        if (_updateInfo is null || _arguments is null)
+        {
+            return;
+        }
 
         IsDownloading = true;
         StatusMessage = "正在等待宿主软件退出…";
@@ -122,7 +125,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (UnauthorizedAccessException)
         {
-            MessageBox.Show("无法在程序目录创建文件，请尝试以管理员身份运行，或检查文件夹权限。", "权限错误");
+            MessageBox.Show("无法写入文件，请检查插件目录的读写权限。", "权限错误");
         }
         catch (Exception ex)
         {

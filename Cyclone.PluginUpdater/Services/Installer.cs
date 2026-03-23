@@ -18,7 +18,9 @@ public class Installer
 
         // 清理已有的旧备份
         if (Directory.Exists(backupDir))
+        {
             Directory.Delete(backupDir, recursive: true);
+        }
 
         // 备份旧目录
         Directory.Move(installDir, backupDir);
@@ -36,7 +38,9 @@ public class Installer
         {
             // 失败：回滚
             if (Directory.Exists(installDir))
+            {
                 Directory.Delete(installDir, recursive: true);
+            }
 
             Directory.Move(backupDir, installDir);
             File.Delete(zipPath);
@@ -54,8 +58,10 @@ public class Installer
         var elapsed = 0;
         while (elapsed < WaitTimeoutMs)
         {
-            if (!Process.GetProcessesByName(processName).Any())
+            if (Process.GetProcessesByName(processName).Length == 0)
+            {
                 return true;
+            }
 
             await Task.Delay(WaitIntervalMs, ct);
             elapsed += WaitIntervalMs;
