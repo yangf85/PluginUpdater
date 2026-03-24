@@ -17,7 +17,7 @@
 | **Cyclone.PluginUpdater.exe** | 插件目录 | 独立 WPF 更新程序，不包含在 ZIP 包中 |
 | **update.xml** | Gitee 仓库 Raw 文件 | 记录最新版本号、ZIP 下载地址、更新日志地址 |
 | **changelog.html** | Gitee 仓库 Raw 文件 | 更新日志页面，固定地址，每次发版覆盖更新 |
-| **plugin.zip** | Gitee Releases 附件 | 插件压缩包，不包含 Cyclone.PluginUpdater.exe |
+| **plugin.zip** | Gitee Releases 附件 | 插件压缩包，不包含 Cyclone.PluginUpdater.exe(只会在第一次发版的时候添加，后续发版均不包含) |
 
 ```
 插件目录/
