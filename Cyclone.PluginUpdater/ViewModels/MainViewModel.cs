@@ -137,12 +137,12 @@ public partial class MainViewModel : ObservableObject
     {
         _arguments = arguments;
         AppName = arguments.AppName;
-        CurrentVersion = arguments.CurrentVersion.ToString(3);
+        CurrentVersion = arguments.CurrentVersion.ToString(4);
 
         try
         {
             _updateInfo = await _checker.FetchUpdateInfoAsync(arguments.XmlUrl);
-            LatestVersion = _updateInfo.Version.ToString(3);
+            LatestVersion = _updateInfo.Version.ToString(4);
 
             if (_checker.HasUpdate(arguments.CurrentVersion, _updateInfo.Version))
             {
