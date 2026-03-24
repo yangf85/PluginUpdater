@@ -32,7 +32,7 @@ Gitee 仓库/
 ├── update.xml                     ← Raw 文件，版本信息入口
 ├── changelog.html                 ← Raw 文件，固定地址，每次发版覆盖
 └── Releases/
-    └── v1.2.0/
+    └── v1.2.0.0/
         └── plugin.zip             ← 插件压缩包附件
 ```
 
@@ -42,7 +42,10 @@ Gitee 仓库/
 插件命令触发
     │
     ▼
-启动 Cyclone.PluginUpdater.exe（传入参数）
+在插件目录下查找文件名包含 PluginUpdater 的 exe
+    │
+    ▼
+启动更新器（传入参数）
     │
     ▼
 先启动更新器，再退出宿主软件
@@ -71,7 +74,8 @@ Gitee 仓库/
                           下载 ZIP 至临时目录
                                │
                                ▼
-                          备份旧目录
+                  逐文件备份旧目录至系统临时目录
+                  （跳过文件名含 PluginUpdater 的 exe）
                                │
                                ▼
                           解压覆盖目标目录
@@ -79,7 +83,7 @@ Gitee 仓库/
                           ┌────┴────┐
                         成功         失败
                           │             │
-                       删除备份      还原备份
+                       删除备份      逐文件还原备份
                           │
                           ▼
                     提示更新完成
@@ -89,7 +93,7 @@ Gitee 仓库/
 
 ## 二、参数说明
 
-插件启动 Cyclone.PluginUpdater.exe 时通过命令行参数传入所有必要信息，更新器本身不硬编码任何软件相关内容。
+插件启动更新器时通过命令行参数传入所有必要信息，更新器本身不硬编码任何软件相关内容。
 
 ### 2.1 参数列表
 
@@ -99,24 +103,42 @@ Gitee 仓库/
 | `--process` | 是 | 需要等待退出的宿主进程名（不含 .exe） | `acad` / `Rhino` |
 | `--dir` | 是 | 插件安装目录，由插件运行时自行获取 | `C:\Users\...\插件目录` |
 | `--xml-url` | 是 | Gitee 上 update.xml 的 Raw 文件地址 | `https://gitee.com/owner/repo/raw/master/update.xml` |
-| `--current-version` | 是 | 当前版本号，从 Assembly 读取 | `1.0.0` |
+| `--current-version` | 是 | 当前版本号，从 Assembly 读取，使用四位格式 | `1.0.0.0` |
 
 ### 2.2 插件端调用示例（C#）
 
 ```csharp
-// 获取插件自身目录和版本号
-string pluginDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-string currentVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString(3); // 取前三位：1.0.0
-string updaterPath = Path.Combine(pluginDir, "Cyclone.PluginUpdater.exe");
+var pluginAssembly = Assembly.GetExecutingAssembly();
+var pluginDir = Path.GetDirectoryName(pluginAssembly.Location)!;
 
-string args = $"--app-name \"CAD 钢结构插件\" " +
-              $"--process acad " +
-              $"--dir \"{pluginDir}\" " +
-              $"--xml-url \"https://gitee.com/owner/repo/raw/master/update.xml\" " +
-              $"--current-version \"{currentVersion}\"";
+// 查找目录下文件名包含 PluginUpdater 的 exe，不依赖固定文件名
+var updaterPath = Directory
+    .GetFiles(pluginDir, "*.exe")
+    .FirstOrDefault(f => Path.GetFileName(f).Contains("PluginUpdater", StringComparison.OrdinalIgnoreCase));
+
+if (updaterPath == null)
+{
+    // 提示未找到更新程序
+    return;
+}
+
+// 取四位版本号：1.0.0.0
+var currentVersion = pluginAssembly.GetName().Version!.ToString(4);
+
+var args = $"--app-name \"CAD 钢结构插件\" " +
+           $"--process acad " +
+           $"--dir \"{pluginDir}\" " +
+           $"--xml-url \"https://gitee.com/owner/repo/raw/master/update.xml\" " +
+           $"--current-version \"{currentVersion}\"";
 
 // 注意：必须先启动更新器，再退出宿主软件
-Process.Start(updaterPath, args);
+Process.Start(new ProcessStartInfo
+{
+    FileName = updaterPath,
+    Arguments = args,
+    UseShellExecute = false
+});
+
 Application.Quit();
 ```
 
@@ -137,17 +159,19 @@ Application.Quit();
 
 ```xml
 <item>
-  <version>1.2.0</version>
-  <url>https://gitee.com/owner/repo/releases/download/v1.2.0/plugin.zip</url>
+  <version>1.2.0.0</version>
+  <url>https://gitee.com/owner/repo/releases/download/v1.2.0.0/plugin.zip</url>
   <changelog-url>https://gitee.com/owner/repo/raw/master/changelog.html</changelog-url>
 </item>
 ```
 
 | 字段 | 说明 |
 |---|---|
-| `version` | 最新版本号，格式为 `主版本.次版本.修订号` |
+| `version` | 最新版本号，格式为四位 `主版本.次版本.修订号.构建号`，与 AssemblyVersion 保持一致 |
 | `url` | plugin.zip 的直链下载地址 |
 | `changelog-url` | changelog.html 的 Raw 文件地址，固定不变 |
+
+> **注意：** 版本号统一使用四位格式（如 `1.0.0.0`），与 `AssemblyVersion` 和 `ToString(4)` 保持一致，避免比较时位数不匹配。
 
 ### 3.2 changelog.html
 
@@ -155,20 +179,20 @@ Application.Quit();
 
 ### 3.3 ZIP 包打包规范
 
-ZIP 包内**只包含插件运行所需的文件**，严禁将 `Cyclone.PluginUpdater.exe` 打入包中。
+ZIP 包内**只包含插件运行所需的文件**，严禁将更新器 exe 打入包中。ZIP 根目录下直接放文件，**不能有额外的子文件夹包裹**，否则解压路径会错位导致覆盖失败。
 
 ```
 plugin.zip
-├── MyPlugin.dll
-├── MyPlugin.gha          （如有）
-└── Resources/            （如有）
+├── MyPlugin.dll           ← 直接在根目录，不能有子文件夹包裹
+├── MyPlugin.gha           （如有）
+└── Resources/             （如有）
 ```
 
 ### 3.4 发版流程
 
 1. 更新 `changelog.html` 内容
-2. 更新 `update.xml` 中的 `version` 和 `url` 字段
-3. 在 Gitee 创建新 Release，Tag 名称格式为 `v1.2.0`
+2. 更新 `update.xml` 中的 `version` 和 `url` 字段（版本号使用四位格式）
+3. 在 Gitee 创建新 Release，Tag 名称格式为 `v1.2.0.0`
 4. 上传 `plugin.zip` 作为 Release 附件
 5. 将步骤 1、2 的文件提交到仓库 master 分支
 
@@ -189,9 +213,10 @@ plugin.zip
 | 场景 | 处理方式 |
 |---|---|
 | 磁盘空间不足 | 解压前预估空间，不足时提前提示，不执行解压 |
-| 解压过程失败 | 删除残留文件，将备份目录重命名还原，提示回滚成功 |
-| 目录权限不足 | 提示以管理员身份运行 Cyclone.PluginUpdater.exe |
+| 解压过程失败 | 逐文件还原备份目录，提示回滚成功 |
+| 目录权限不足 | 提示以管理员身份运行更新程序 |
 | 写入 change.html 失败（权限不足） | 弹窗提示检查插件目录读写权限 |
+| 未找到更新器 exe | 提示"未找到文件名包含 PluginUpdater 的 exe，请确认插件目录完整" |
 
 ### 4.3 进程等待
 
@@ -204,12 +229,18 @@ plugin.zip
 ### 4.4 备份与回滚
 
 ```
+备份策略：逐文件复制（非 Directory.Move），跳过文件名包含 PluginUpdater 的 exe
+备份位置：系统临时目录（Path.GetTempPath()）
 备份目录命名：原目录名 + "_backup_" + 时间戳
-示例：MyPlugin_backup_20260323_185030
+示例：C:\Users\xxx\AppData\Local\Temp\net48_backup_20260324_185030
 
 成功：解压完成后删除备份目录
-失败：删除解压残留 → 还原备份目录 → 提示用户
+失败：逐文件复制回安装目录（同样跳过更新器 exe） → 删除备份目录 → 提示用户
 注意：创建新备份前若已存在旧备份，先将其删除
+
+选择逐文件操作而非 Directory.Move 的原因：
+更新器自身正在运行，操作系统会锁住该 exe 文件，
+Directory.Move 会因此失败；逐文件复制可跳过被占用的文件。
 ```
 
 ---
@@ -266,5 +297,7 @@ plugin.zip
 ## 七、其他说明
 
 - Gitee 公开 API 有访问频率限制，更新器仅在用户主动触发时请求一次，不做后台轮询。
-- `Cyclone.PluginUpdater.exe` 自身如需升级，需单独处理，建议保持逻辑足够简单以减少升级需求。
+- 更新器 exe 文件名不固定，插件侧通过查找目录下文件名包含 `PluginUpdater` 的 exe 来定位，更新器改名不影响使用。
+- 更新器自身如需升级，需单独处理，建议保持逻辑足够简单以减少升级需求。
 - 若后续需支持私有仓库，在参数中增加 `--token` 字段，请求时附加到 Header 即可，不影响现有逻辑。
+- Gitee Raw 地址末尾不要附加查询参数（如 `?v=1`），Gitee 不支持此类参数，会导致 404。
