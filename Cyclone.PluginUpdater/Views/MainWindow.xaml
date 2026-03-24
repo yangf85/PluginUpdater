@@ -9,13 +9,12 @@
     Height="300"
     Background="#F0F0F0"
     FontFamily="Microsoft YaHei UI"
-    FontSize="13"
+    FontSize="14"
+    Icon="/app.png"
     ResizeMode="NoResize"
     WindowStartupLocation="CenterScreen">
     <Window.Resources>
-
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
         <!--  主按钮（蓝色）  -->
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Background" Value="#0078D7" />
