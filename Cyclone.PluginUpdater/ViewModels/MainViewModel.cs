@@ -13,7 +13,9 @@ namespace Cyclone.PluginUpdater.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly UpdateChecker _checker;
+
     private readonly Downloader _downloader;
+
     private readonly Installer _installer;
 
     [ObservableProperty]
@@ -43,6 +45,33 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string LatestVersion { get; set; }
+
+    public async Task InitializeAsync(UpdateArguments arguments)
+    {
+        _arguments = arguments;
+        AppName = arguments.AppName;
+        CurrentVersion = arguments.CurrentVersion.ToString(4);
+
+        try
+        {
+            _updateInfo = await _checker.FetchUpdateInfoAsync(arguments.XmlUrl);
+            LatestVersion = _updateInfo.Version.ToString(4);
+
+            if (_checker.HasUpdate(arguments.CurrentVersion, _updateInfo.Version))
+            {
+                IsUpdateAvailable = true;
+                StatusMessage = $"发现新版本 {LatestVersion}";
+            }
+            else
+            {
+                StatusMessage = "已是最新版本";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"无法连接服务器，请检查网络（{ex.Message}）";
+        }
+    }
 
     [RelayCommand]
     private async Task StartUpdateAsync()
@@ -98,65 +127,61 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ViewChangelogAsync()
     {
-        if (string.IsNullOrEmpty(_updateInfo?.ChangelogUrl)) return;
+        if (string.IsNullOrWhiteSpace(_updateInfo?.ChangelogUrl))
+        {
+            MessageBox.Show("更新日志地址为空。");
+            return;
+        }
+
+        string currentStep = "准备开始";
 
         try
         {
-            // 1. 下载 HTML 内容
-            // 确保这里的 URL 是 Raw 格式，例如: https://gitee.com/.../raw/master/changelog.html
-            string htmlContent = await _downloader.DownloadChangelogAsync(_updateInfo.ChangelogUrl);
+            currentStep = "下载更新日志";
 
-            if (string.IsNullOrWhiteSpace(htmlContent)) return;
+            string htmlContent =
+                await _downloader.DownloadChangelogAsync(
+                    _updateInfo.ChangelogUrl
+                );
 
-            // 2. 获取程序运行目录并拼凑文件名
-            // AppDomain.CurrentDomain.BaseDirectory 是获取程序根目录最稳妥的方法
-            string exePath = AppDomain.CurrentDomain.BaseDirectory;
-            string filePath = Path.Combine(exePath, "change.html");
+            if (string.IsNullOrWhiteSpace(htmlContent))
+            {
+                MessageBox.Show("下载成功，但更新日志内容为空。");
+                return;
+            }
 
-            // 3. 写入文件（UTF8 编码，防止中文乱码）
-            await File.WriteAllTextAsync(filePath, htmlContent, Encoding.UTF8);
+            currentStep = "创建临时文件";
 
-            // 4. 用默认浏览器打开
+            string filePath = Path.Combine(
+                Path.GetTempPath(),
+                $"change_{Guid.NewGuid():N}.html"
+            );
+
+            currentStep = $"写入文件：{filePath}";
+
+            await File.WriteAllTextAsync(
+                filePath,
+                htmlContent,
+                new UTF8Encoding(false)
+            );
+
+            currentStep = $"打开文件：{filePath}";
+
             Process.Start(new ProcessStartInfo
             {
                 FileName = filePath,
                 UseShellExecute = true
             });
         }
-        catch (UnauthorizedAccessException)
-        {
-            MessageBox.Show("无法写入文件，请检查插件目录的读写权限。", "权限错误");
-        }
         catch (Exception ex)
         {
-            MessageBox.Show($"显示更新日志失败：{ex.Message}", "错误");
-        }
-    }
-
-    public async Task InitializeAsync(UpdateArguments arguments)
-    {
-        _arguments = arguments;
-        AppName = arguments.AppName;
-        CurrentVersion = arguments.CurrentVersion.ToString(4);
-
-        try
-        {
-            _updateInfo = await _checker.FetchUpdateInfoAsync(arguments.XmlUrl);
-            LatestVersion = _updateInfo.Version.ToString(4);
-
-            if (_checker.HasUpdate(arguments.CurrentVersion, _updateInfo.Version))
-            {
-                IsUpdateAvailable = true;
-                StatusMessage = $"发现新版本 {LatestVersion}";
-            }
-            else
-            {
-                StatusMessage = "已是最新版本";
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"无法连接服务器，请检查网络（{ex.Message}）";
+            MessageBox.Show(
+                $"当前步骤：{currentStep}\n\n" +
+                $"异常类型：{ex.GetType().FullName}\n\n" +
+                $"异常信息：{ex.Message}\n\n" +
+                $"详细信息：{ex}",
+                "显示更新日志失败"
+            );
         }
     }
 
